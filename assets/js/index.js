@@ -50,16 +50,21 @@ async function extractDomain() {
   const humansElement = document.getElementById("humans");
 
   if (matches && matches[3]) {
-    // Extracted domain name
     const domain = matches[3];
     const humansTxt = await fetchData(domain);
-    // Pass the domain to the engine or display it
+
     domainElement.textContent = "Extracted Domain: " + domain;
-    humansElement.textContent = humansTxt ? humansTxt : `humans.txt not found!`;
-    humansElement.style.color = humansTxt ? "#c6c6c6" : "red";
+
+    // === Fallback message goes here ===
+    if (!humansTxt || humansTxt.trim() === "" || humansTxt.includes("<!DOCTYPE html>")) {
+      humansElement.textContent = "humans.txt not found or blocked (InfinityFree limitation)";
+      humansElement.style.color = "red";
+    } else {
+      humansElement.textContent = humansTxt;
+      humansElement.style.color = "#c6c6c6";
+    }
+
     humansElement.style.display = "block";
-    // You can also redirect to the engine URL with the extracted domain
-    // window.location.href = "https://your-engine-url/?domain=" + domain;
   } else {
     domainElement.textContent = "Invalid URL";
     humansElement.style.display = "none";
@@ -67,6 +72,7 @@ async function extractDomain() {
 
   showResultContainer();
 }
+
 
 function showResultContainer() {
   const resultContainerElement = document.querySelector(".result-container");

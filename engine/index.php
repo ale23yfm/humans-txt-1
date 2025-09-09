@@ -40,25 +40,21 @@ function checkHumansTxtExistence(string $domain): string|bool
     foreach ($urlsToTry as $url) {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // follow redirects
-
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, "humans-txt-checker"); // set User-Agent
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
         curl_close($ch);
 
-        // Detect InfinityFree “redirect to index.html”
-        if (strpos($response, '<!DOCTYPE html>') !== false && $httpCode === 200) {
-            return false; // Treat as not found
-        }
-
-        if ($httpCode === 200 && !empty($response)) {
+        // InfinityFree returns your own index.html on failure
+        if ($httpCode === 200 && !empty($response) && stripos($response, '<!DOCTYPE html>') === false) {
             return $response;
         }
     }
 
     return false;
 }
+
 
 // === Main ===
 $domain = filter_input(INPUT_POST, 'domain', FILTER_SANITIZE_URL)
