@@ -8,7 +8,7 @@ window.onload = function() {
 }
 
 async function fetchData(domain) {
-    const apiUrl = `https://api.peviitor.ro/humans-txt/engine/?domain=${domain}`;
+    const apiUrl = `https://humans-txt.42web.io/?domain=${domain}`;
 
     try {
         const response = await fetch(apiUrl);
