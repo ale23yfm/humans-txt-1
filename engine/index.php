@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 // === CORS Headers ===
@@ -40,9 +41,16 @@ function checkHumansTxtExistence(string $domain): string|bool
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // follow redirects
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
         curl_close($ch);
+
+        // Detect InfinityFree “redirect to index.html”
+        if (strpos($response, '<!DOCTYPE html>') !== false && $httpCode === 200) {
+            return false; // Treat as not found
+        }
 
         if ($httpCode === 200 && !empty($response)) {
             return $response;
