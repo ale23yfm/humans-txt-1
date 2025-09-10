@@ -1,76 +1,124 @@
 <?php
-
-declare(strict_types=1);
-
-// === CORS Headers ===
+// Set the allowed origin (change * to the specific domain you want to allow)
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+// Set the allowed HTTP methods (e.g., GET, POST, PUT, DELETE)
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE");
+
+// Set the allowed HTTP headers
+header("Access-Control-Allow-Headers: Content-Type, Referrer-Policy");
+
+// Allow credentials (if needed)
+header("Access-Control-Allow-Credentials: true");
+
+// Set the cache expiration time (in seconds) for the preflight request
+header("Access-Control-Max-Age: 3600");
+
+// Handle preflight requests
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    // This is a preflight request, so just respond with the allowed headers
+    header("HTTP/1.1 200 OK");
     exit;
 }
 
-const DEFAULT_DOMAIN = 'humanstxt.org';
-const SERVER_ID = '{{SERVER_ID}}';
-const CHANNEL_ID = '{{CHANNEL_ID}}';
+$rawDomain = isset($_POST['domain']) ? $_POST['domain'] : "https:\/\/peviitor.ro";
+$rawDomain = isset($_GET['domain']) ? $_GET['domain'] : $rawDomain;
 
-function sendToDiscordWebhook(string $msg): void
-{
-    $url = 'https://discord.com/api/webhooks/' . SERVER_ID . '/' . CHANNEL_ID;
-    $data = ['content' => $msg];
+function discord_webhook($msg) {
+    $prefix ='Found humans.txt at '; 
+    $date = '  on '.date("l d-m-Y H:i:s");
+    $msg =$prefix.$msg.'/humans.txt'.$date;
+    $method = 'POST';
 
+	$server_id = '{{SERVER_ID}}'; // Placeholder for the SERVER_ID
+    $channel_id = '{{CHANNEL_ID}}'; // Placeholder for the CHANNEL_ID
+	
+    $url = "https://discord.com/api/webhooks/".$server_id."/".$channel_id;
+    $data = '{"content": "'.$msg.'"}';
+
+    $options = array(
+        'http' => array(
+            'header'  => "Content-type: application/json\r\n",
+            'method'  => 'POST',
+            'content' => $data
+        )
+    );
+    $context  = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    if ($result === FALSE) { /* Handle error */ }
+    
+ }
+
+function addProtocolToDomain($domain) {
+    if (strpos($domain, 'http://') !== 0 && strpos($domain, 'https://') !== 0) {
+        $domain = 'https://' . $domain; // Add "https://" as the protocol
+    }
+    return $domain;
+}
+
+function addWwwAfterHttps($domain) {
+    if (strpos($domain, 'https://www.') !== 0) {
+        $domain = str_replace('https://', 'https://www.', $domain); // Add "www" after "https://"
+    }
+    return $domain;
+}
+
+function checkHumansTxtExistence($domain) {
+    $url = $domain.'/humans.txt';
+    $headers =[];
     $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_exec($ch);
+   
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+     if ($httpCode == 200) {
+        return $response;
+     }
+
+     else {
+
+    if (strpos($response, 'humans.txt') !== false) {
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
+        $response = curl_exec($ch);
+        $lastEffectiveURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+   
+    if ($httpCode == 404) {
+       return false;
+    } elseif (strpos($response, 'humans.txt') !== false) 
+               { 
+        return $response;
+               } 
+                else 
+                     {  return false;
+                     }
+                                                  }
+     }
     curl_close($ch);
 }
 
-function checkHumansTxtExistence(string $domain): string|bool
-{
-    $urlsToTry = [
-        "https://$domain/humans.txt",
-        "https://www.$domain/humans.txt"
-    ];
+// Remove backslashes and call the function to add the protocol
+$domainWithProtocol = addProtocolToDomain(stripslashes($rawDomain));
 
-    foreach ($urlsToTry as $url) {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, "humans-txt-checker"); // set User-Agent
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+// Call the function to add "www" after "https://"
+$domainWithWww = addWwwAfterHttps($domainWithProtocol);
 
-        // InfinityFree returns your own index.html on failure
-        if ($httpCode === 200 && !empty($response) && stripos($response, '<!DOCTYPE html>') === false) {
-            return $response;
-        }
-    }
+// Call the function to check the existence of humans.txt
+ $result = checkHumansTxtExistence($domainWithWww);
+if (!$result) {
+     $result_r = checkHumansTxtExistence($domainWithProtocol);
+       if (!$result_r) {
+            header("HTTP/1.1 404 Not Found"); 
+                      }
+            else { 
+                discord_webhook($domainWithProtocol);
+                echo $result_r;}
+             }
+              else
+                 {
+                  discord_webhook($domainWithWww);
+                  echo $result;
+                  }
 
-    return false;
-}
-
-
-// === Main ===
-$domain = filter_input(INPUT_POST, 'domain', FILTER_SANITIZE_URL)
-    ?? filter_input(INPUT_GET, 'domain', FILTER_SANITIZE_URL)
-    ?? DEFAULT_DOMAIN;
-
-$result = checkHumansTxtExistence($domain);
-
-if ($result) {
-    sendToDiscordWebhook("Found humans.txt at $domain on " . date('l d-m-Y H:i:s'));
-    header('Content-Type: text/plain; charset=utf-8');
-    echo $result;
-    exit;
-}
-
-// Not found
-header('Content-Type: application/json; charset=utf-8');
-http_response_code(404);
-echo json_encode(["error" => "humans.txt not found"]);
+?>

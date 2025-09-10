@@ -11,7 +11,7 @@ window.onload = function () {
 };
 
 async function fetchData(domain) {
-  const apiUrl = `https://humans-txt.42web.io/?domain=${domain}`;
+  const apiUrl = `/engine/?domain=${domain}`;
 
   try {
     const response = await fetch(apiUrl);
